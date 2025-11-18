@@ -65,33 +65,81 @@ class _ManageDoctorScreenState extends State<ManageDoctorScreen> with SingleTick
 
   // Salva ou Atualiza o Médico
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    print("Iniciando salvamento do médico..."); // DEBUG
+
+    if (!_formKey.currentState!.validate()) {
+      print("Erro de validação do formulário"); // DEBUG
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final user = _supabase.auth.currentUser;
+
+      if (user == null) {
+        throw Exception("Usuário não logado!");
+      }
+
+      print("ID do Usuário Logado (Clínica): ${user.id}"); // DEBUG
+
+      // Prepara os dados
       final data = {
-        'clinica_id': user!.id,
+        'clinica_id': user.id, // Garanta que esta coluna existe no banco
         'nome': _nomeCtrl.text,
         'especialidade': _espCtrl.text,
         'crm': _crmCtrl.text,
+        'ativo': true,
       };
 
+      print("Enviando dados: $data"); // DEBUG
+
       if (_createdDoctorId == null) {
-        // Insert retorna o registro criado
-        final res = await _supabase.from('medicos').insert(data).select().single();
-        _createdDoctorId = res['id'];
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Médico criado! Configure os horários.')));
-        _tabController.animateTo(1); // Vai para aba horários
+        // --- MODO CRIAÇÃO ---
+        print("Tentando Inserir...");
+
+        final res = await _supabase
+            .from('medicos')
+            .insert(data)
+            .select()
+            .single(); // .single() retorna erro se não inserir
+
+        print("Sucesso na inserção! Resposta: $res"); // DEBUG
+
+        _createdDoctorId = res['id']; // O Supabase retorna 'id' (int)
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Médico criado! Configure os horários.'), backgroundColor: Colors.green)
+          );
+          _tabController.animateTo(1); // Vai para aba horários
+        }
       } else {
-        // Update
-        await _supabase.from('medicos').update(data).eq('id', _createdDoctorId!);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Dados atualizados!')));
+        // --- MODO ATUALIZAÇÃO ---
+        print("Tentando Atualizar ID $_createdDoctorId...");
+
+        await _supabase
+            .from('medicos')
+            .update(data)
+            .eq('id', _createdDoctorId!); // id aqui é o BIGINT da tabela medicos
+
+        print("Sucesso na atualização!");
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Dados atualizados!'), backgroundColor: Colors.green)
+          );
+        }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e')));
+      print("ERRO AO SALVAR MÉDICO: $e"); // <--- OLHE ISSO NO CONSOLE
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red)
+        );
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
