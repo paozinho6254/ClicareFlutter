@@ -15,10 +15,10 @@ class UserModel {
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'],
-      nomeExibicao: json['nome'] ?? 'Usuário', // Ajuste conforme sua tabela
-      email: json['email'],
-      // Converte a string do banco para o Enum
+      id: json['id_usuario'],
+      // GARANTA QUE ESTÁ USANDO 'nome_usuario' (Prioridade)
+      nomeExibicao: json['nome_usuario'] ?? json['nome'] ?? 'Nome Desconhecido',
+      email: json['email'] ?? '',
       role: _parseUserType(json['tipo_usuario']),
     );
   }

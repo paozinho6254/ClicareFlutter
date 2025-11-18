@@ -32,24 +32,31 @@ class AuthProvider with ChangeNotifier {
   // --- BUSCAR DADOS DO USUÁRIO ---
   Future<void> _fetchUserProfile(String userId) async {
     try {
-      // CORREÇÃO: Busca na tabela 'usuarios' que criamos no SQL
+      print("Buscando perfil para o ID: $userId"); // DEBUG
+
       final response = await _supabase
           .from('usuarios')
           .select()
           .eq('id_usuario', userId)
-          .single();
+          .maybeSingle(); // <--- Mudei de .single() para .maybeSingle()
 
+      if (response == null) {
+        print("ERRO CRÍTICO: Usuário autenticado, mas sem perfil na tabela 'usuarios'!");
+        // Opcional: Forçar logout se não tiver perfil para evitar tela branca
+        // await logout();
+        return;
+      }
+
+      print("Perfil encontrado: $response"); // DEBUG
       _userProfile = UserModel.fromJson(response);
+
     } catch (e) {
-      print('Erro ao buscar perfil: $e');
-      // Se der erro (ex: usuário criado no Auth mas sem linha na tabela usuarios),
-      // podemos optar por não deslogar imediatamente ou tratar o erro.
+      print('EXCEÇÃO ao buscar perfil: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
-
   // --- LOGIN ---
   Future<void> login(String email, String password) async {
     try {
@@ -126,7 +133,7 @@ class AuthProvider with ChangeNotifier {
     required String telefone,
   }) async {
     try {
-      // 1. Auth
+      // 1. Criar Autenticação
       final authResponse = await _supabase.auth.signUp(
         email: email,
         password: password,
@@ -135,25 +142,41 @@ class AuthProvider with ChangeNotifier {
       if (authResponse.user == null) throw Exception('Falha na autenticação');
       final String userId = authResponse.user!.id;
 
-      // 2. Tabela Usuarios
+      print("Usuário Auth criado: $userId. Tentando inserir no banco...");
+
+      // 2. Inserir na tabela USUARIOS
+      // ATENÇÃO: As chaves aqui DEVEM ser iguais às colunas do Supabase
       await _supabase.from('usuarios').insert({
         'id_usuario': userId,
-        'nome_usuario': nome,
+        'nome_usuario': nome, // Verifique se no banco é 'nome' ou 'nome_usuario'
         'email': email,
-        'tipo_usuario': 'clinica',
+        'tipo_usuario': 'clinica', // Minúsculo
         'ativo': true,
       });
 
-      // 3. Tabela Clinica
+      print("Tabela 'usuarios' inserida com sucesso.");
+
+      // 3. Inserir na tabela CLINICA
       await _supabase.from('clinica').insert({
         'id_clinica': userId,
         'cnpj_clinica': cnpj,
         'telefone_clinica': telefone,
       });
 
+      print("Tabela 'clinica' inserida com sucesso.");
+
+      // 4. FORÇAR ATUALIZAÇÃO DO PERFIL
+      // Como o insert acabou de acontecer, agora é seguro buscar os dados.
       await _fetchUserProfile(userId);
 
     } catch (e) {
+      print("ERRO NO REGISTRO: $e");
+      // Se der erro no banco, mas o usuário foi criado no Auth, deleta ele para não "sujar"
+      if (_supabase.auth.currentUser != null) {
+        // Nota: Delete via Admin API não é permitido direto pelo cliente por segurança,
+        // mas podemos deslogar.
+        await logout();
+      }
       rethrow;
     }
   }
