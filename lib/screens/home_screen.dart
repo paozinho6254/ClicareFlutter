@@ -36,7 +36,7 @@ class CliCareHome extends StatelessWidget {
                       Text(
                         // Pega o nome do usuário do provider.
                         // Usa 'Usuário' como um valor padrão caso o nome seja nulo.
-                        authProvider.user?.nomeExibicao ?? 'Usuário',
+                        authProvider.userProfile?.nomeExibicao ?? 'Carregando...',
                         style: const TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.bold,

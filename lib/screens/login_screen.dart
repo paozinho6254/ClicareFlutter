@@ -35,24 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // Chama o método de login do nosso AuthProvider
+      // Chama o método de login do AuthProvider, que agora usa o Supabase
       await Provider.of<AuthProvider>(context, listen: false).login(
         _emailController.text,
         _passwordController.text,
       );
-      // Se o login for bem-sucedido, o Consumer no main.dart cuidará da navegação
     } catch (error) {
-      // Se o login falhar, o AuthProvider lançará um erro
       setState(() {
-        _errorMessage = 'Credenciais inválidas. Verifique seu e-mail e senha.';
+        _errorMessage = 'Falha no login: ${error.toString()}';
       });
-    } finally {
-      // Garante que o indicador de loading pare, mesmo se houver erro
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
   }
 

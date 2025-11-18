@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/api_service.dart'; // Importe seu serviço de API
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 
 class PatientRegisterScreen extends StatefulWidget {
   const PatientRegisterScreen({super.key});
@@ -9,8 +11,8 @@ class PatientRegisterScreen extends StatefulWidget {
 }
 
 class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
+
   final _formKey = GlobalKey<FormState>();
-  final _apiService = ApiService();
 
   // Controladores para cada campo
   final _nomeController = TextEditingController();
@@ -20,67 +22,68 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
   final _senhaController = TextEditingController();
   final _senhaConfirmController = TextEditingController();
 
+  final cpfFormatter = MaskTextInputFormatter(
+    mask: '###.###.###-##',
+    filter: { "#": RegExp(r'[0-9]') },
+    type: MaskAutoCompletionType.lazy,
+  );
+
+  final dataFormatter = MaskTextInputFormatter(
+    mask: '####-##-##', // Formato do banco (Ano-Mes-Dia) ou '##/##/####' se preferir visual BR
+    filter: { "#": RegExp(r'[0-9]') },
+  );
+
   bool _isLoading = false;
   String _errorMessage = '';
 
   Future<void> _submitRegister() async {
-    // 1. Valida os campos do formulário. Se inválido, não continua.
+    // 1. Valida o formulário. Se algum campo estiver inválido, a execução para aqui.
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    // 2. Inicia o estado de "carregando" na UI.
+    // 2. Ativa o indicador de carregamento e limpa erros antigos.
     setState(() {
       _isLoading = true;
-      _errorMessage = ''; // Limpa qualquer mensagem de erro anterior.
+      _errorMessage = '';
     });
 
     try {
-      // 3. Monta o objeto de dados a ser enviado.
-      final Map<String, dynamic> dadosCadastro = {
-        "nome": _nomeController.text,
-        "email": _emailController.text,
-        "senha": _senhaController.text,
-        "cpf": _cpfController.text.replaceAll(RegExp(r'[^0-9]'), ''),
-        "dataNascimento": _dataNascimentoController.text,
-      };
+      // 3. CHAMA O MÉTODO 'registerPatient' DO AUTHPROVIDER DIRETAMENTE
+      //    Passando os valores dos controllers para os parâmetros nomeados.
+      await Provider.of<AuthProvider>(context, listen: false).registerPatient(
+        email: _emailController.text,
+        password: _senhaController.text,
+        nome: _nomeController.text,
+        cpf: _cpfController.text.replaceAll(RegExp(r'[^0-9]'), ''), // Remove formatação do CPF
+        dataNascimento: _dataNascimentoController.text, telefone: '',
+      );
 
-      // 4. Tenta executar a operação de rede.
-      await _apiService.registerPatient(dadosCadastro);
-
-      // --- CAMINHO FELIZ (SUCESSO) ---
+      // --- CAMINHO DE SUCESSO ---
       if (mounted) {
-        // Mostra uma mensagem de sucesso.
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Paciente cadastrado com sucesso! Redirecionando...'),
+            content: Text('Cadastro realizado com sucesso! Faça o login.'),
             backgroundColor: Colors.green,
           ),
         );
 
-        // Aguarda um segundo e redireciona para a tela de login.
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            Navigator.of(context).popUntil((route) => route.isFirst);
-          }
-        });
+        // Volta para a tela de login.
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
 
     } catch (error) {
-      // --- CAMINHO INFELIZ (ERRO) ---
-      // 'error' contém a exceção lançada pelo ApiService.
+      // --- CAMINHO DE ERRO ---
+      // Se o Supabase retornar um erro (ex: email já existe), ele será capturado aqui.
       if (mounted) {
         setState(() {
-          // 6. Atualiza a UI para mostrar a mensagem de erro para o usuário.
-          // O replaceFirst remove o "Exception: " do início da mensagem para ficar mais limpo.
-          _errorMessage = error.toString().replaceFirst('Exception: ', '');
+          // Exibe a mensagem de erro vinda do Supabase/AuthProvider.
+          print('Usuário de paciente já existente!');
         });
       }
-
     } finally {
       // --- EXECUTA SEMPRE ---
-      // 7. Garante que o indicador de carregamento seja desativado,
-      //    permitindo que o usuário tente novamente.
+      // Garante que o indicador de carregamento seja desativado.
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -146,11 +149,19 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
                       TextFormField(
                         controller: _cpfController,
                         keyboardType: TextInputType.number,
+                        // AQUI ESTA A MÁGICA:
+                        inputFormatters: [cpfFormatter],
                         decoration: const InputDecoration(
-                          labelText: 'CPF (apenas números)',
+                          labelText: 'CPF',
+                          hintText: '000.000.000-00',
                         ),
-                        validator: (v) =>
-                        v!.length != 11 ? 'CPF deve ter 11 dígitos' : null,
+                        validator: (v) {
+                          // Valida se está preenchido e se tem o tamanho completo da máscara
+                          if (v == null || v.isEmpty || v.length < 14) {
+                            return 'CPF incompleto';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 18),
                       TextFormField(
@@ -221,14 +232,28 @@ class _PatientRegisterScreenState extends State<PatientRegisterScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      const SizedBox(height: 20),
+
+                      // --- BOTÃO JÁ TENHO CONTA ---
                       TextButton(
                         onPressed: () {
-                          Navigator.of(context,).popUntil((route) =>
-                          route.isFirst);
+                          // Remove todas as telas de cadastro da pilha e volta para a primeira (Login)
+                          Navigator.of(context).popUntil((route) => route.isFirst);
                         },
-                        child: const Text(
-                          'Já tenho uma conta',
-                          style: TextStyle(color: primaryColor),
+                        child: RichText(
+                          text: const TextSpan(
+                            text: 'Já possui cadastro? ',
+                            style: TextStyle(color: Colors.grey, fontSize: 14),
+                            children: [
+                              TextSpan(
+                                text: 'Fazer Login',
+                                style: TextStyle(
+                                  color: Color(0xFF319F86), // primaryColor
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
