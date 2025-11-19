@@ -29,9 +29,20 @@ class _MyDoctorsScreenState extends State<MyDoctorsScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF319F86),
         child: const Icon(Icons.add, color: Colors.white),
-        onPressed: () {
-          // Abre tela de criação (sem médico passado por parâmetro)
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageDoctorScreen()));
+        onPressed: () async {
+          // O 'await' pausa a execução aqui até você voltar da outra tela
+          final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ManageDoctorScreen())
+          );
+
+          // Se result for 'true', significa que salvamos um médico novo
+          if (result == true) {
+            setState(() {
+              // Chamar setState vazio força o build rodar de novo.
+              // Se você usa FutureBuilder, ele vai disparar a query novamente.
+            });
+          }
         },
       ),
       body: StreamBuilder<List<DoctorModel>>(

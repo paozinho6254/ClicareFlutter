@@ -72,6 +72,7 @@ class _ManageDoctorScreenState extends State<ManageDoctorScreen> with SingleTick
       return;
     }
 
+
     setState(() => _isLoading = true);
 
     try {
@@ -140,6 +141,14 @@ class _ManageDoctorScreenState extends State<ManageDoctorScreen> with SingleTick
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Salvo com sucesso!'), backgroundColor: Colors.green)
+      );
+      // O 'true' aqui avisa a tela anterior que houve mudança
+      Navigator.pop(context, true);
     }
   }
 
