@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/next_appointment_card.dart';
 
 class CliCareHome extends StatelessWidget {
   const CliCareHome({super.key});
@@ -140,61 +141,7 @@ class CliCareHome extends StatelessWidget {
 
               const SizedBox(height: 10),
 
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF00BFA6),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: const [
-                        Text(
-                          "Dr. Ana",
-                          style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
-                        ),
-                        Icon(Icons.videocam, color: Colors.white),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    const Text(
-                      "Especialista de Pele | Hospital",
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        const Icon(Icons.videocam_outlined,
-                            color: Colors.white70, size: 18),
-                        const SizedBox(width: 6),
-                        const Text(
-                          "Consulta de Vídeo",
-                          style: TextStyle(color: Colors.white, fontSize: 14),
-                        ),
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Text(
-                            "Hoje, 5:00 PM",
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        )
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              const NextAppointmentCard(),
 
               const SizedBox(height: 30),
 

@@ -25,15 +25,21 @@ class _MyDoctorsScreenState extends State<MyDoctorsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Meus Médicos'), backgroundColor: const Color(0xFF319F86)),
+      appBar: AppBar(
+        title: const Text(
+          'Meus Médicos',
+          style: TextStyle(color: Colors.white),
+        ),
+        backgroundColor: const Color(0xFF319F86),
+      ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF319F86),
         child: const Icon(Icons.add, color: Colors.white),
         onPressed: () async {
           // O 'await' pausa a execução aqui até você voltar da outra tela
           final result = await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ManageDoctorScreen())
+            context,
+            MaterialPageRoute(builder: (_) => const ManageDoctorScreen()),
           );
 
           // Se result for 'true', significa que salvamos um médico novo
@@ -48,8 +54,10 @@ class _MyDoctorsScreenState extends State<MyDoctorsScreen> {
       body: StreamBuilder<List<DoctorModel>>(
         stream: _getDoctorsStream(),
         builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text('Erro: ${snapshot.error}'));
-          if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError)
+            return Center(child: Text('Erro: ${snapshot.error}'));
+          if (!snapshot.hasData)
+            return const Center(child: CircularProgressIndicator());
 
           final doctors = snapshot.data!;
 
@@ -66,14 +74,24 @@ class _MyDoctorsScreenState extends State<MyDoctorsScreen> {
                 child: ListTile(
                   leading: CircleAvatar(
                     backgroundColor: const Color(0xFF319F86).withOpacity(0.2),
-                    child: Text(doctor.nome[0], style: const TextStyle(color: Color(0xFF319F86))),
+                    child: Text(
+                      doctor.nome[0],
+                      style: const TextStyle(color: Color(0xFF319F86)),
+                    ),
                   ),
                   title: Text(doctor.nome),
-                  subtitle: Text('${doctor.especialidade} | CRM: ${doctor.crm}'),
+                  subtitle: Text(
+                    '${doctor.especialidade} | CRM: ${doctor.crm}',
+                  ),
                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                   onTap: () {
                     // Abre tela de edição (passando o médico)
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => ManageDoctorScreen(doctor: doctor)));
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ManageDoctorScreen(doctor: doctor),
+                      ),
+                    );
                   },
                 ),
               );

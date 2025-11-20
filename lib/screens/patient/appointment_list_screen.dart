@@ -52,7 +52,7 @@ class AppointmentsListScreen extends StatelessWidget {
               return _appointmentCard(
                 // Aqui você precisaria fazer um join no Supabase para pegar o nome do médico
                 // Por enquanto vamos colocar um placeholder ou ID
-                  doctorName: "Médico (ID: ${apt['id_medico'].toString().substring(0,5)}...)",
+                  doctorName: "Médico (ID: ${apt['id_medico']})",
                   specialty: apt['modalidade'] ?? 'Geral',
                   date: DateFormat('dd/MM • HH:mm').format(date),
                   status: apt['status'] ?? 'Agendado',

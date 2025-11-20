@@ -18,7 +18,7 @@ class _ClinicHomeScreenState extends State<ClinicHomeScreen> {
   // Lista de telas para navegação
   final List<Widget> _screens = [
     const ClinicDashboardTab(), // O Dashboard que vou criar abaixo
-    const MyDoctorsScreen(),    // A tela de lista de médicos que já temos
+    const MyDoctorsScreen(), // A tela de lista de médicos que já temos
     const Center(child: Text("Agenda Geral (Em Breve)")),
     const Center(child: Text("Perfil da Clínica (Em Breve)")),
   ];
@@ -33,10 +33,7 @@ class _ClinicHomeScreenState extends State<ClinicHomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       // Mantém o estado das abas para não recarregar tudo ao trocar
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: _onItemTapped,
@@ -70,13 +67,58 @@ class _ClinicHomeScreenState extends State<ClinicHomeScreen> {
 
 // --- WIDGET DO DASHBOARD (A TELA PRINCIPAL) ---
 
-class ClinicDashboardTab extends StatelessWidget {
+class ClinicDashboardTab extends StatefulWidget {
   const ClinicDashboardTab({super.key});
 
   @override
+  State<ClinicDashboardTab> createState() => _ClinicDashboardTabState();
+}
+
+class _ClinicDashboardTabState extends State<ClinicDashboardTab> {
+  final _supabase = Supabase.instance.client;
+
+  // Variáveis de Estado
+  int _totalMedicos = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchStats();
+  }
+
+  // Função para buscar estatísticas
+  Future<void> _fetchStats() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      // A mágica do Supabase: .count(CountOption.exact)
+      // Isso conta as linhas sem precisar baixar os dados (rápido e economiza dados)
+      final count = await _supabase
+          .from('medicos')
+          .count(CountOption.exact)
+          .eq('clinica_id', userId);
+      // Se quiser contar apenas os ativos, descomente abaixo:
+      // .eq('ativo', true);
+
+      if (mounted) {
+        setState(() {
+          _totalMedicos = count;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print("Erro ao contar médicos: $e");
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final user = Provider.of<AuthProvider>(context).userProfile;
-    final nomeClinica = user?.nomeExibicao ?? 'Clínica';
+    // Para pegar o nome da clínica, usamos o Provider
+    final userProfile = Provider.of<AuthProvider>(context).userProfile;
+    final nomeClinica = userProfile?.nomeExibicao ?? 'Minha Clínica';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -86,8 +128,18 @@ class ClinicDashboardTab extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text("Bem-vindo de volta,", style: TextStyle(color: Colors.grey, fontSize: 14)),
-            Text(nomeClinica, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 18)),
+            const Text(
+              "Bem-vindo de volta,",
+              style: TextStyle(color: Colors.grey, fontSize: 14),
+            ),
+            Text(
+              nomeClinica,
+              style: const TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
+            ),
           ],
         ),
         actions: [
@@ -96,97 +148,137 @@ class ClinicDashboardTab extends StatelessWidget {
             onPressed: () {
               Provider.of<AuthProvider>(context, listen: false).logout();
             },
-          )
+          ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. Cards de Estatísticas Rápidas
-            const Text("Visão Geral", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                _buildStatCard(
+      body: RefreshIndicator(
+        // Permite puxar para baixo para atualizar os números
+        onRefresh: _fetchStats,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Cards de Estatísticas Rápidas
+              const Text(
+                "Visão Geral",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _buildStatCard(
                     icon: Icons.calendar_today,
                     color: Colors.blue,
                     label: "Hoje",
-                    value: "0", // Futuro: Count do banco
-                    context: context
-                ),
-                const SizedBox(width: 12),
-                _buildStatCard(
+                    value:
+                        "0", // Futuro: Implementar contagem de agendamentos de hoje
+                  ),
+                  const SizedBox(width: 12),
+                  _buildStatCard(
                     icon: Icons.check_circle_outline,
                     color: Colors.green,
                     label: "Realizadas",
-                    value: "0", // Futuro: Count do banco
-                    context: context
-                ),
-                const SizedBox(width: 12),
-                _buildStatCard(
+                    value: "0",
+                  ),
+                  const SizedBox(width: 12),
+
+                  // --- CARD DE MÉDICOS ATUALIZADO ---
+                  _buildStatCard(
                     icon: Icons.people,
                     color: const Color(0xFF319F86),
                     label: "Médicos",
-                    value: "-", // Pode buscar da lista
-                    context: context
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 24),
-
-            // 2. Atalhos Rápidos
-            const Text("Ações Rápidas", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildActionButton(context, Icons.person_add, "Novo Médico", () {
-                    // Navega para a aba de médicos (index 1) ou abre modal direto
-                    // Aqui um exemplo simples abrindo a tela de cadastro
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageDoctorScreen()));
-                    // Nota: precisa importar o manage_doctor_screen.dart
-                  }),
-                  _buildActionButton(context, Icons.block, "Bloquear Data", () {}),
-                  _buildActionButton(context, Icons.settings, "Configurar", () {}),
+                    // Mostra loading ou o número
+                    value: _isLoading ? "..." : _totalMedicos.toString(),
+                  ),
                 ],
               ),
-            ),
 
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-            // 3. Próximos Agendamentos (Resumo)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text("Próximos Pacientes", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                TextButton(onPressed: (){}, child: const Text("Ver todos"))
-              ],
-            ),
-
-            // Placeholder para quando não tem consultas
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(30),
-              decoration: BoxDecoration(
+              // 2. Atalhos Rápidos
+              const Text(
+                "Ações Rápidas",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200)
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildActionButton(
+                      context,
+                      Icons.person_add,
+                      "Novo Médico",
+                      () async {
+                        // Ao voltar do cadastro, atualiza o contador
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const ManageDoctorScreen(),
+                          ),
+                        );
+                        _fetchStats();
+                      },
+                    ),
+                    _buildActionButton(
+                      context,
+                      Icons.block,
+                      "Bloquear Data",
+                      () {},
+                    ),
+                    _buildActionButton(
+                      context,
+                      Icons.settings,
+                      "Configurar",
+                      () {},
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                children: const [
-                  Icon(Icons.event_busy, size: 40, color: Colors.grey),
-                  SizedBox(height: 10),
-                  Text("Sem agendamentos para hoje", style: TextStyle(color: Colors.grey)),
+
+              const SizedBox(height: 24),
+
+              // 3. Próximos Agendamentos (Resumo)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "Próximos Pacientes",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  TextButton(onPressed: () {}, child: const Text("Ver todos")),
                 ],
               ),
-            ),
-          ],
+
+              // Placeholder para quando não tem consultas
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(30),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: Column(
+                  children: const [
+                    Icon(Icons.event_busy, size: 40, color: Colors.grey),
+                    SizedBox(height: 10),
+                    Text(
+                      "Sem agendamentos para hoje",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -198,7 +290,6 @@ class ClinicDashboardTab extends StatelessWidget {
     required Color color,
     required String label,
     required String value,
-    required BuildContext context
   }) {
     return Expanded(
       child: Container(
@@ -207,23 +298,37 @@ class ClinicDashboardTab extends StatelessWidget {
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
         child: Column(
           children: [
             Icon(icon, color: color, size: 28),
             const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
-            Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+            Text(
+              value,
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              label,
+              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Widget Auxiliar: Botão de Ação
-  Widget _buildActionButton(BuildContext context, IconData icon, String label, VoidCallback onTap) {
+  Widget _buildActionButton(
+    BuildContext context,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return InkWell(
       onTap: onTap,
       child: Column(
@@ -234,7 +339,10 @@ class ClinicDashboardTab extends StatelessWidget {
             child: Icon(icon, color: const Color(0xFF319F86)),
           ),
           const SizedBox(height: 8),
-          Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+          ),
         ],
       ),
     );
