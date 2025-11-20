@@ -1,3 +1,5 @@
+import 'package:clicare/screens/patient/doctor_search_screen.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
@@ -83,20 +85,26 @@ class CliCareHome extends StatelessWidget {
 
               // Botão de consulta rápida
               Center(
-                child: ElevatedButton(
+                child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00BFA6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(24),
                     ),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 40, vertical: 14),
+                        horizontal: 30, vertical: 14),
                   ),
                   onPressed: () {
-                    // TODO: Adicionar navegação para a tela de agendamento
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const DoctorSearchScreen(),
+                      ),
+                    );
                   },
-                  child: const Text(
-                    "Consulta Rápida",
+                  icon: Icon(CupertinoIcons.clock, color: Colors.white, size: 24,),
+                  label: const Text(
+                    "Agendar Consulta",
                     style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ),
