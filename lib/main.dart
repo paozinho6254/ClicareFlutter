@@ -2,6 +2,7 @@ import 'package:clicare/screens/clinic/clinic_home_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 // Importe suas telas e providers
 import 'models/user_model.dart';
@@ -17,6 +18,9 @@ Future<void> main() async {
     url: 'https://ucyezowavvcolkyjfium.supabase.co',
     anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVjeWV6b3dhdnZjb2xreWpmaXVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM0NzQxOTAsImV4cCI6MjA3OTA1MDE5MH0.257gl7chhDjrzBIgzlX659zBRqdcgAjfxXhqIxRFAaw',
   );
+
+  // 2. CORREÇÃO DO ERRO: Inicializa a formatação de datas para Português
+  await initializeDateFormatting('pt_BR', null);
 
   runApp(
     ChangeNotifierProvider(

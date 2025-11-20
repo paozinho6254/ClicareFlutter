@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+// 1. IMPORT NECESSÁRIO PARA CORRIGIR O ERRO DE DATA
+import 'package:intl/date_symbol_data_local.dart';
+
 import '../../models/schedule_config_model.dart';
-import 'doctors_available_at_time_screen.dart'; // Vamos criar no Passo 3
+import 'doctors_available_at_time_screen.dart';
 
 class ClinicAggregateScheduleScreen extends StatefulWidget {
   final String clinicId;
@@ -24,17 +27,29 @@ class _ClinicAggregateScheduleScreenState extends State<ClinicAggregateScheduleS
   final _supabase = Supabase.instance.client;
 
   DateTime _selectedDate = DateTime.now();
-  bool _isLoading = false;
-  List<TimeOfDay> _aggregatedSlots = []; // Lista de horários únicos disponíveis na clínica
-  late List<DateTime> _nextDays;
+  bool _isLoading = true; // Começa carregando
+  List<TimeOfDay> _aggregatedSlots = [];
+
+  // Inicializa vazia para não dar erro antes de carregar o idioma
+  List<DateTime> _nextDays = [];
 
   @override
   void initState() {
     super.initState();
-    _nextDays = List.generate(14, (index) => DateTime.now().add(Duration(days: index)));
-    _fetchAggregatedSlots(_selectedDate);
+
+    // 2. CORREÇÃO: Inicializa o idioma ANTES de gerar as datas
+    initializeDateFormatting('pt_BR', null).then((_) {
+      if (mounted) {
+        setState(() {
+          _nextDays = List.generate(14, (index) => DateTime.now().add(Duration(days: index)));
+          // Agora que temos datas e idioma, buscamos os horários
+          _fetchAggregatedSlots(_selectedDate);
+        });
+      }
+    });
   }
 
+  // --- A FUNÇÃO QUE ESTAVA FALTANDO ---
   Future<void> _fetchAggregatedSlots(DateTime date) async {
     setState(() {
       _isLoading = true;
@@ -43,29 +58,41 @@ class _ClinicAggregateScheduleScreenState extends State<ClinicAggregateScheduleS
     });
 
     try {
-      // 1. Buscar TODOS os médicos dessa clínica com essa especialidade
+      print("\n=== INICIO DO DEBUG DE HORÁRIOS ===");
+      print("1. Buscando para Data: $date (Dia da semana: ${date.weekday})");
+      print("   Clínica: ${widget.clinicId} | Especialidade: ${widget.specialty}");
+
+      // A. Buscar Médicos
       final doctorsRes = await _supabase
           .from('medicos')
-          .select('id')
+          .select('id, nome')
           .eq('clinica_id', widget.clinicId)
           .eq('especialidade', widget.specialty)
           .eq('ativo', true);
 
+      print("2. Médicos encontrados: $doctorsRes");
+
       final doctorIds = (doctorsRes as List).map((e) => e['id'] as int).toList();
 
       if (doctorIds.isEmpty) {
+        print(">>> AVISO: Nenhum médico encontrado. Verifique se a especialidade está escrita EXATAMENTE igual.");
         setState(() => _isLoading = false);
         return;
       }
 
-      // 2. Buscar configurações de horário desses médicos para o dia da semana
+      // B. Buscar Configurações (Regras)
       final configsRes = await _supabase
           .from('horarios_config')
           .select()
           .filter('medico_id', 'in', doctorIds)
           .eq('dia_semana', date.weekday);
 
-      // 3. Buscar agendamentos já feitos para esses médicos nesta data
+      print("3. Configurações (Regras) encontradas: ${configsRes.length}");
+      if (configsRes.isEmpty) {
+        print(">>> AVISO: Médicos existem, mas NENHUM tem horário configurado para o dia da semana ${date.weekday}.");
+      }
+
+      // C. Buscar Agendamentos (Ocupados)
       final startOfDay = DateTime(date.year, date.month, date.day);
       final endOfDay = startOfDay.add(const Duration(days: 1));
 
@@ -76,64 +103,88 @@ class _ClinicAggregateScheduleScreenState extends State<ClinicAggregateScheduleS
           .gte('data_consulta', startOfDay.toIso8601String())
           .lt('data_consulta', endOfDay.toIso8601String());
 
-      // Transforma agendamentos em um Mapa fácil de consultar: "ID_MEDICO -> Lista de Horarios Ocupados"
+      print("4. Agendamentos (Ocupados) hoje: ${bookingsRes.length}");
+
+      // Mapeia ocupados
       final Map<int, List<TimeOfDay>> busySlotsByDoctor = {};
       for (var b in bookingsRes as List) {
-        final mId = b['id_medico'] as int; // ou String se mudou no banco, mas no seu SQL era ID numérico na tab medicos? Verifique.
-        // NOTA: Se no passo anterior mudamos o ID do médico para UUID ou Int, ajuste aqui.
-        // Vou assumir que o ID da tabela 'medicos' é BIGINT (int no Dart).
-
+        final mId = b['id_medico'] as int;
         final dt = DateTime.parse(b['data_consulta']).toLocal();
         final time = TimeOfDay(hour: dt.hour, minute: dt.minute);
-
         if (!busySlotsByDoctor.containsKey(mId)) busySlotsByDoctor[mId] = [];
         busySlotsByDoctor[mId]!.add(time);
       }
 
-      // 4. Calcular slots e fazer o Merge (União)
-      final Set<TimeOfDay> uniqueSlots = {}; // Set evita duplicatas (ex: 10:00 só aparece uma vez)
+      // D. Calcular Slots
+      final Set<TimeOfDay> uniqueSlots = {};
 
       for (var configMap in configsRes as List) {
-        final config = ScheduleConfigModel.fromJson(configMap);
-        final medicoId = configMap['medico_id']; // Precisamos saber de quem é esse config
+        final medicoId = configMap['medico_id'];
+        print("   -> Processando regra para médico ID: $medicoId");
 
-        int currentMinutes = config.horaInicio.hour * 60 + config.horaInicio.minute;
-        int endMinutes = config.horaFim.hour * 60 + config.horaFim.minute;
+        // Converte strings "08:00:00" para TimeOfDay
+        final inicioStr = configMap['hora_inicio'].toString().split(':');
+        final fimStr = configMap['hora_fim'].toString().split(':');
 
-        while (currentMinutes + config.duracaoMinutos <= endMinutes) {
+        final horaInicio = TimeOfDay(hour: int.parse(inicioStr[0]), minute: int.parse(inicioStr[1]));
+        final horaFim = TimeOfDay(hour: int.parse(fimStr[0]), minute: int.parse(fimStr[1]));
+
+        // Garante duração
+        int duration = configMap['duracao_consulta_minutos'] ?? 30;
+        if (duration <= 0) duration = 30;
+
+        print("      Regra: ${horaInicio.format(context)} até ${horaFim.format(context)} (Blocos de $duration min)");
+
+        // Loop matemático
+        int currentMinutes = horaInicio.hour * 60 + horaInicio.minute;
+        int endMinutes = horaFim.hour * 60 + horaFim.minute;
+
+        while (currentMinutes + duration <= endMinutes) {
           final slotTime = TimeOfDay(hour: currentMinutes ~/ 60, minute: currentMinutes % 60);
 
-          // Verifica se ESSE médico está ocupado nesse horário
+          // Verifica Ocupado
           bool isBooked = false;
           if (busySlotsByDoctor.containsKey(medicoId)) {
             isBooked = busySlotsByDoctor[medicoId]!.any((t) => t.hour == slotTime.hour && t.minute == slotTime.minute);
           }
 
-          // Verifica passado
+          // Verifica Passado (Só se for hoje)
           bool isPast = false;
           if (date.day == DateTime.now().day && date.month == DateTime.now().month) {
             final now = TimeOfDay.now();
-            if (slotTime.hour < now.hour || (slotTime.hour == now.hour && slotTime.minute < now.minute)) isPast = true;
+            // Compara minutos totais para precisão
+            final nowMin = now.hour * 60 + now.minute;
+            final slotMin = slotTime.hour * 60 + slotTime.minute;
+            if (slotMin < nowMin) isPast = true;
           }
 
-          if (!isBooked && !isPast) {
+          if (isBooked) {
+            print("      [X] ${slotTime.format(context)} - Ocupado");
+          } else if (isPast) {
+            print("      [X] ${slotTime.format(context)} - Já passou");
+          } else {
+            print("      [OK] ${slotTime.format(context)} - Disponível!");
             uniqueSlots.add(slotTime);
           }
-          currentMinutes += config.duracaoMinutos;
+
+          currentMinutes += duration;
         }
       }
 
-      // Ordenar os horários
+      // Ordenar
       final sortedSlots = uniqueSlots.toList()
         ..sort((a, b) => (a.hour * 60 + a.minute).compareTo(b.hour * 60 + b.minute));
+
+      print("=== FIM DO DEBUG: Total de slots gerados: ${sortedSlots.length} ===");
 
       setState(() {
         _aggregatedSlots = sortedSlots;
         _isLoading = false;
       });
 
-    } catch (e) {
-      print("Erro ao agregar horários: $e");
+    } catch (e, stackTrace) {
+      print("ERRO CRÍTICO AO BUSCAR HORÁRIOS: $e");
+      print(stackTrace);
       setState(() => _isLoading = false);
     }
   }
@@ -151,7 +202,9 @@ class _ClinicAggregateScheduleScreenState extends State<ClinicAggregateScheduleS
         ),
         backgroundColor: const Color(0xFF00BFA6),
       ),
-      body: Column(
+      body: _nextDays.isEmpty
+          ? const Center(child: CircularProgressIndicator()) // Proteção enquanto carrega data
+          : Column(
         children: [
           // Calendário Horizontal
           Container(
